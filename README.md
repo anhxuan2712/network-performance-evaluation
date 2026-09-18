@@ -44,36 +44,85 @@ Trong các doanh nghiệp vừa và nhỏ (SME), hạ tầng mạng nội bộ t
 
 Mô hình được tối ưu hóa tài nguyên (tổng RAM chỉ ~4GB – 6GB, phù hợp mọi laptop sinh viên) nhưng vẫn đảm bảo đầy đủ các phân vùng mạng và luồng dữ liệu cần đo kiểm:
 
+```text
+========================================================================================================================
+                                             SƠ ĐỒ KIẾN TRÚC MẠNG & LUỒNG ĐO KIỂM
+========================================================================================================================
+
+   TRỤ SỞ CHÍNH (HQ SITE)                                                                  TRUNG TÂM DỮ LIỆU (DC SITE)
+  ┌────────────────────────────────────────────────────────┐                              ┌─────────────────────────────┐
+  │ [VLAN 10: 192.168.10.0/24]                             │                              │ [VLAN 30: 172.16.30.0/24]   │
+  │  💻 Client 1 (192.168.10.10)                           │                              │  🏢 Multi-Service Server    │
+  │     └─ Sinh tải Web (ab), DNS                          │                              │     IP: 172.16.30.10        │
+  │                                                        │                              │     ├─ Nginx Web (Port 80)  │
+  │ [VLAN 20: 192.168.20.0/24]                             │                              │     ├─ vsftpd FTP (Port 21) │
+  │  💻 Client 2 (192.168.20.10)                           │                              │     ├─ Bind9 DNS (Port 53)  │
+  │     ├─ Sinh tải nghẽn FTP, iperf3                      │                              │     └─ Zabbix Agent 2       │
+  │     └─ ⚙️ Áp dụng Linux tc QoS Egress Shaper           │                              │        (Port 10050)         │
+  │                                                        │                              └──────────────┬──────────────┘
+  │ [VLAN 99: 192.168.99.0/24]                             │                                             │
+  │  🖥️ Zabbix Server NMS (192.168.99.10)                  │                                             │
+  │     └─ Giám sát tập trung (SNMP, Agent 2, ICMP)        │                                             │
+  └────────────────────────┬───────────────────────────────┘                                             │
+                           │ (Access / Trunk 802.1Q)                                                     │
+  ┌────────────────────────┴───────────────────────────────┐                                             │
+  │ 🔀 Switch SW1 (Cisco IOL Switch - Quản lý VLAN)       │                                             │
+  └────────────────────────┬───────────────────────────────┘                                             │
+                           │ (Trunk 802.1Q / Sub-interfaces)                                             │
+  ┌────────────────────────┴───────────────────────────────┐                              ┌──────────────┴──────────────┐
+  │ 🌐 Router R1 (HQ Gateway - Cisco IOL)                  │  ĐƯỜNG TRUYỀN WAN (OSPF A0)  │ 🌐 Router R2 (DC Gateway)   │
+  │    IP: 10.0.12.1 / Sub-IF: .10, .20, .99               │◄════════════════════════════►│    IP: 10.0.12.2 / .30.1    │
+  └────────────────────────────────────────────────────────┘ ⚡ BOTTLENECK: 10 Mbps, 20ms └─────────────────────────────┘
+                                                               (PnetLab Link Quality)
+
+  ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  📊 CÁC LUỒNG GIÁM SÁT ZABBIX (NMS):
+     • [SNMPv2c Polling - Port 161]         : Zabbix Server ──► Router R1, Router R2, Switch SW1 (CPU, RAM, Traffic IF)
+     • [Zabbix Agent 2 - Port 10050]        : Zabbix Server ──► Multi-Service Server (Web Nginx, FTP, System Metrics)
+     • [ICMP Ping Polling / fping]          : Zabbix Server ──► R1, R2, SRV_MAIN (Đo Latency, Jitter, Packet Loss)
+========================================================================================================================
+```
+
+<details>
+<summary><b>📐 Xem mã nguồn sơ đồ dạng Mermaid (Click để mở)</b></summary>
+
 ```mermaid
 flowchart TB
-    subgraph WAN_LINK["LIÊN KẾT WAN / ĐIỂM NGHẼN BOTTLENECK CHÍNH"]
-        R1["Router R1 (HQ Gateway)\nCisco IOS / SNMP"]
-        R2["Router R2 (DC Gateway)\nCisco IOS / SNMP"]
-        R1 <-->|Đường truyền WAN OSPF Area 0 (10.0.12.0/30)\n⚡ PnetLab Virtual Wire: Bandwidth 10 Mbps, Delay 20ms| R2
+    subgraph HQ_SITE["TRỤ SỞ CHÍNH (HQ SITE)"]
+        direction TB
+        subgraph HQ_CLIENTS["Phân Vùng VLAN Client & Giám Sát"]
+            direction LR
+            VLAN10["Client 1 (VLAN 10)<br/>IP: 192.168.10.10<br/>Sinh tải Web ab & DNS"]
+            VLAN20["Client 2 (VLAN 20)<br/>IP: 192.168.20.10<br/>Sinh tải iperf3/FTP & Linux tc QoS"]
+            VLAN99["Zabbix Server NMS (VLAN 99)<br/>IP: 192.168.99.10<br/>Máy chủ giám sát"]
+        end
+        SW1["Switch SW1 (Phân tách VLAN 802.1Q)"]
+        R1["Router R1 (HQ Gateway - Cisco IOL)"]
+
+        VLAN10 --- SW1
+        VLAN20 --- SW1
+        VLAN99 --- SW1
+        SW1 --- R1
     end
 
-    subgraph HQ_SITE["TRỤ SỞ CHÍNH (HQ LAN - Switch SW1)"]
-        SW1["Switch SW1 (Phân tách VLAN)"]
-        R1 --- SW1
-        VLAN10["VLAN 10: Client Web & DNS\n(Client 1 - IP: 192.168.10.10)\n[Sinh tải Web ab & DNS]"]
-        VLAN20["VLAN 20: Client FTP & iperf3\n(Client 2 - IP: 192.168.20.10)\n[Node sinh tải nghẽn iperf3/FTP & áp Linux tc QoS Egress Shaper]"]
-        VLAN99["VLAN 99: Máy chủ Zabbix NMS\n(Zabbix Server - IP: 192.168.99.10)"]
-        SW1 --- VLAN10
-        SW1 --- VLAN20
-        SW1 --- VLAN99
-    end
-
-    subgraph DC_SITE["TRUNG TÂM DỮ LIỆU / SERVER FARM"]
-        SRV_MAIN["Multi-Service Linux Server\n(Web Nginx + FTP vsftpd + DNS Bind9)\nIP: 172.16.30.10 + Zabbix Agent 2"]
+    subgraph DC_SITE["TRUNG TÂM DỮ LIỆU (DC SITE)"]
+        direction TB
+        R2["Router R2 (DC Gateway - Cisco IOL)"]
+        SRV_MAIN["Multi-Service Linux Server<br/>IP: 172.16.30.10<br/>Web Nginx + FTP vsftpd + DNS Bind9 + Zabbix Agent 2"]
         R2 --- SRV_MAIN
     end
 
-    VLAN99 -.->|1. SNMP Polling (Port 161)| R1
-    VLAN99 -.->|1. SNMP Polling (Port 161)| R2
-    VLAN99 -.->|1. SNMP Polling (Port 161)| SW1
-    VLAN99 -.->|2. Zabbix Agent 2 (Port 10050)| SRV_MAIN
-    VLAN99 -.->|3. ICMP Ping Polling (Đo Latency/Loss)| R1
+    %% WAN Bottleneck Link
+    R1 <-->|"ĐƯỜNG TRUYỀN WAN OSPF (10.0.12.0/30)<br/>⚡ Bottleneck 10 Mbps, 20ms"| R2
+
+    %% Zabbix Monitoring Polling Flows
+    VLAN99 -.->|"SNMP Port 161"| R1
+    VLAN99 -.->|"SNMP Port 161"| R2
+    VLAN99 -.->|"SNMP Port 161"| SW1
+    VLAN99 -.->|"Zabbix Agent 2 Port 10050"| SRV_MAIN
 ```
+
+</details>
 
 > [!IMPORTANT]
 > **NGUYÊN TẮC THIẾT KẾ BOTTLENECK & VỊ TRÍ ÁP DỤNG QOS CHUẨN MỰC:**
