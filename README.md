@@ -1,10 +1,10 @@
-# README -- Đề tài Đánh giá hiệu năng mạng MANET bằng NS-2
+# Đề tài Đánh giá hiệu năng mạng MANET bằng NS-2
 
 > **Tên đề tài:** Nghiên cứu và đánh giá hiệu năng giao thức định tuyến
 > AODV trong mạng MANET sử dụng NS-2\
 > **Nhóm:** 06 thành viên\
 > **Thời gian dự kiến:** 14 ngày\
-> **Công cụ chính:** NS-2.35, NAM, AWK/Python, Excel hoặc Google Sheets
+> **Công cụ chính:** NS-2.35, NAM, AWK/Python, Excel
 
 ------------------------------------------------------------------------
 
