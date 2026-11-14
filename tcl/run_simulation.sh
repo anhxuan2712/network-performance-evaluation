@@ -12,18 +12,37 @@ TRACE_RAW_DIR="$BASE_DIR/trace/raw"
 
 mkdir -p "$TRACE_RAW_DIR"
 
-echo "=== BẮT ĐẦU CHẠY CÁC KỊCH BẢN MÔ PHỎNG NS-2 ==="
+echo "================================================================================"
+echo "    BẮT ĐẦU CHẠY TỰ ĐỘNG HÓA 4 KỊCH BẢN MÔ PHỎNG MANET AODV TRÊN NS-2.35"
+echo "================================================================================"
 
-SCENARIOS=("SC01_speed_0" "SC02_speed_5" "SC03_speed_10" "SC04_speed_15")
+SCENARIO_NAMES=("SC01" "SC02" "SC03" "SC04")
 SPEEDS=(0 5 10 15)
+RUN_SEED=1
 
-for i in "${!SCENARIOS[@]}"; do
-    SC="${SCENARIOS[$i]}"
+for i in "${!SCENARIO_NAMES[@]}"; do
+    SC="${SCENARIO_NAMES[$i]}"
     SPEED="${SPEEDS[$i]}"
-    echo "--> Đang thực thi kịch bản: $SC (Tốc độ tối đa: ${SPEED} m/s)..."
-    
-    # Lệnh chạy ns-2 (điều chỉnh tham số phù hợp với file tcl chính)
-    # ns "$TCL_DIR/manet_aodv_base.tcl" "$SC" "$SPEED" "$TRACE_RAW_DIR"
+    TR_FILE="$TRACE_RAW_DIR/trace_${SC,,}_run01.tr"
+    NAM_FILE="$TRACE_RAW_DIR/nam_${SC,,}_run01.nam"
+
+    echo ""
+    echo ">>> ĐANG CHẠY KỊCH BẢN $SC (Tốc độ tối đa: ${SPEED} m/s) <<<"
+    echo "    - Trace output: $TR_FILE"
+    echo "    - NAM output  : $NAM_FILE"
+
+    ns "$TCL_DIR/manet_aodv_base.tcl" \
+        -sc "$SC" \
+        -speed "$SPEED" \
+        -seed "$RUN_SEED" \
+        -tr "$TR_FILE" \
+        -nam "$NAM_FILE"
+
+    echo ">>> ĐÃ HOÀN THÀNH KỊCH BẢN $SC <<<"
 done
 
-echo "=== HOÀN THÀNH TẤT CẢ KỊCH BẢN MÔ PHỎNG ==="
+echo ""
+echo "================================================================================"
+echo "    HOÀN TẤT TOÀN BỘ 4 KỊCH BẢN MÔ PHỎNG!"
+echo "    Dữ liệu trace thô đã được lưu đầy đủ trong: trace/raw/"
+echo "================================================================================"
